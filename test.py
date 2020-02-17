@@ -1,49 +1,72 @@
 import numpy as np
 import pandas as pd 
-import scipy
+import random 
+#dataset
+d0 = 2
+d1 = h = 100 #size of hidden layer
+d2 = C = 3 # number of classes
+N = 100
+eta = 0.1
+X = np.zeros((d0, N*C)) #data matrix (each row = single example)
+Y = np.zeros(N*C, dtype = 'uint8')
+for j in range(C):
 
-def softmaxFunction(Z):
-    
-    e_Z = np.exp(Z)
-    A = e_Z / e_Z.sum(axis = 0)
+    ix = range(N*j, N*(j+1))
+    r = np.linspace(0.0,1,N) #radius
+    t = np.linspace(j*4,(j+1)*4,N) + np.random.randn(N)*0.2
+    X[:,ix] = np.c_[r*np.sin(t), r*np.cos(t)].T
+    Y[ix] = j
+
+Y = pd.Series(Y)
+Y = np.array(pd.get_dummies(Y)).T
+
+def network():
+
+    model = dict(
+        W1 = np.zeros((d0, d1)),
+        b1 = np.zeros((d1, 1)),
+        W2 = np.zeros((d1, d2)),
+        b2 = np.zeros((d2, 1))
+    )
+
+    return model
+
+def softmax(Z):
+
+    e_Z = np.exp(Z - np.max(Z, axis = 0, keepdims = True))
+    A = e_Z/e_Z.sum(axis = 0)
 
     return A
 
-df = pd.read_csv('https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data')
+def reluDerivative(X):
 
-iris = pd.DataFrame({'SepalLengthCm': df.iloc[:,0],
-                     'SepalWidthCm': df.iloc[:,1],
-                     'PetalLengthCm': df.iloc[:,2],
-                     'PetalWidthCm': df.iloc[:,3],
-                     'Species': df.iloc[:,4]})
-iris.loc[-1] = [5.1, 3.5, 1.4, 0.2, 'Iris-setosa']
-iris.index = iris.index + 1
-iris = iris.sort_index()
+    X[X <= 0] = 0
+    X[X > 0] = 1
 
-np.random.seed(2)
-random_index = np.random.rand(len(iris)) < 0.8
-train = iris[random_index].reset_index()
-test = iris[~random_index].reset_index()
-train = train.drop(['index'], axis= 1)
-test = test.drop(['index'], axis = 1)
+    return X
 
-X = (train.iloc[:,0:4].values).T
-ones = np.ones((1, X.shape[1]))
-Xbar = np.concatenate((ones, X), axis = 0)
-N = Xbar.shape[1]
-d = Xbar.shape[0]
-y = train['Species']
-kind_of_label = y.unique()
-y = y.map({'Iris-setosa': 0, 'Iris-versicolor': 1, 'Iris-virginica': 2})
-one_hot_coding = np.array(pd.get_dummies(y)).T
-yi = one_hot_coding[:,0]
-ai = np.array([[0.1, 0.9, 0]])
-e = ai - yi
-xi = Xbar[:,0].reshape(d, 1)
-W = np.ones((d, 3))
-Z = np.dot(W.T, Xbar)
-A = softmaxFunction(Z)
-print(e.T)
-print(Xbar[:,0].shape)
-print(A)
-print(Z.shape)
+X_train = X.T 
+Y_train = Y.T
+
+mini_X = X_train[50:100].T
+mini_Y = Y_train[50:100].T
+#feedforward
+model = network()
+Z1 = np.dot(model['W1'].T, mini_X) + model['b1']
+A1 = np.maximum(Z1, 0)
+Z2 = np.dot(model['W2'].T, A1) + model['b2']
+mini_Yhat = softmax(Z2)
+#backward
+E2 = (mini_Yhat - mini_Y)/mini_Y.shape[1]
+dJdW2 = np.dot(A1, E2.T)
+dJdb2 = np.sum(E2, axis = 1, keepdims = True)
+E1 = (np.dot(model['W2'], E2)) * reluDerivative(Z1)
+dJdW1 = np.dot(mini_X, E1.T)
+dJdb1 = np.sum(E1, axis = 1, keepdims = True)
+#update weights
+model['W2'] += -eta * dJdW2
+model['b2'] += -eta * dJdb2
+model['W1'] += -eta * dJdW1
+model['b1'] += -eta * dJdb1
+print(type(model))
+print(Y.shape)
